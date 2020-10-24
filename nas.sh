@@ -183,8 +183,37 @@ ENDSSH
 }
 ###############################################################################
 ###############################################################################
-hddstatuscheck(){
-    echo "hddstatuscheck"
+hddsmartcheck(){
+    _i=1
+    _num=$(( $1 + 1))
+    _return=
+    _output="PLHOLDER"
+
+    while [ ${_i} -lt ${_num} ]
+    do
+
+    _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
+getsysinfo hdsmart ${_i}
+ENDSSH
+)
+        _smart=`echo ${_text}`
+
+        _return=${_return}$( mergetoicingatext "${_output}" "HD ${_i} Smart" "${_smart}" )
+        if [ "${_smart}" = "GOOD" ]
+        then
+            if [ "${_smart}" != "${EXIT_CRIT}" ]
+            then
+                _rc=${EXIT_OK}
+            fi
+        else
+            _rc=${EXIT_CRIT}
+        fi
+
+        _output="NONE"
+        true $((_i=_i+1))
+    done
+    echo ${_return} | sed "s/PLHOLDER/HD SMART Status - ${_smart}/"
+    exit ${_rc}
 }
 ###############################################################################
 ###############################################################################
@@ -312,7 +341,7 @@ FANNUN=`echo $INFO | grep SysFanNum | awk -F: '{print $2}'`
             systempcheck
             ;;
         "HDDSTATUS")
-            hddstatuscheck
+            hddsmartcheck ${DRIVESNUM}
             ;;
         *)
             echo "no MODE selected"
