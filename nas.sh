@@ -36,7 +36,13 @@ Option  GNU long option         Meaning
 }
 
 ###############################################################################
+##
+##
+##                                  Functions
+##
+##
 ###############################################################################
+
 capacitycheck(){
     _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
 getsysinfo vol_totalsize 0 && echo "-"
@@ -47,7 +53,7 @@ ENDSSH
     _total=`echo ${_text} | awk -F- '{print $1}'`
     _free=`echo ${_text} | awk -F- '{print $2}'`
 
-    _percent=$( converttoMB ${_total} ${_free} )
+    _percent=$( converttoGB ${_total} ${_free} )
     _output="Capacity "
   
 
@@ -203,7 +209,7 @@ mergetoicingatext(){
 ###############################################################################
 ###############################################################################
 
-converttoMB(){
+converttoGB(){
 
     _total=$1
     _free=$2
@@ -226,7 +232,13 @@ EOF
     echo ${_percent}
 }
 
-
+###############################################################################
+##
+##
+##                                  MAIN PART
+##
+##
+###############################################################################
 
 
 
