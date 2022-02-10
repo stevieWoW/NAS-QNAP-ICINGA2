@@ -2,7 +2,7 @@
 #
 #
 PLUGIN_NAME="nas"
-PLUGIN_VERSION="2020.10.19"
+PLUGIN_VERSION="2022.02.11"
 PRINTINFO=`printf "\n%s, version %s\n \n" "$PLUGIN_NAME" "$PLUGIN_VERSION"`
 #
 # if nothing was declared
@@ -29,6 +29,7 @@ Option  GNU long option         Meaning
  -h     --hostname      set hostname/IP     
  -u     --username      set username
  -p     --port          set Port default(22)
+ -r     --remote        set remote Host
  -c     --critical      set critical value
  -w     --warning       set warning value
  -m     --mode          CAPACITY,BACKUP,VOLUME,SYSTEMP
@@ -44,11 +45,23 @@ Option  GNU long option         Meaning
 ###############################################################################
 
 capacitycheck(){
-    _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
+    if [ -z ${REMOTE} ]
+    then
+        _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
 getsysinfo vol_totalsize 0 && echo "-"
 getsysinfo vol_freesize 0
 ENDSSH
 )
+    else
+        _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
+ssh ${USERNAME}@${REMOTE} -T <<ENDSSH2
+getsysinfo vol_totalsize 0 && echo "-"
+getsysinfo vol_freesize 0
+ENDSSH2
+ENDSSH
+)
+    fi
+     _ttext=${_text}
     _text=`echo $_text | sed 's/ //g'`
     _total=`echo ${_text} | awk -F- '{print $1}'`
     _free=`echo ${_text} | awk -F- '{print $2}'`
@@ -57,11 +70,11 @@ ENDSSH
     _output="Capacity "
   
 
-    if [ ${_percent} -le ${WARNING} ]
+    if [ ${_percent} -ge ${WARNING} ]
     then
         _rc=${EXIT_OK}
         _status="OK"
-    elif [ ${_percent} -ge ${CRITICAL} ]
+    elif [ ${_percent} -le ${CRITICAL} ]
     then
         _rc=${EXIT_CRIT}
         _status="CRITICAL"
@@ -71,8 +84,9 @@ ENDSSH
     fi
 
 
-    _return=${_return}$( mergetoicingatext "${_output} - ${_status}" "Used(%)" "${_percent}" "%" "${WARNING}" "${CRITICAL}" "0" "100" )
+    _return=${_return}$( mergetoicingatext "${_output} - ${_status}" "Free(%)" "${_percent}" "%" "${WARNING}" "${CRITICAL}" "0" "100" )
     echo $_return
+    echo $_ttext
     exit ${_rc}
 }
 
@@ -91,11 +105,24 @@ backupcheck(){
 ###############################################################################
 ###############################################################################
 volumecheck(){
-    _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
+    if [ -z ${REMOTE} ]
+    then
+        _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
 getsysinfo vol_desc 0 && echo " - "
 getsysinfo vol_status 0
 ENDSSH
 )
+    else
+        _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
+ssh ${USERNAME}@${REMOTE} -T <<ENDSSH2
+getsysinfo vol_desc 0 && echo " - "
+getsysinfo vol_status 0
+ENDSSH2
+ENDSSH
+)
+
+    fi
+
     _status=`echo ${_text} | awk -F\- '{print $2}' | sed 's/ //g'`
 
     if [ "${_status}" = "Ready" ]
@@ -120,10 +147,22 @@ hdtempscheck(){
     while [ ${_i} -lt ${_num} ]
     do
 
-    _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
+        if [ -z ${REMOTE} ]
+        then
+        _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
 getsysinfo hdtmp ${_i}
 ENDSSH
 )
+        else
+        _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
+ssh ${USERNAME}@${REMOTE} -T <<ENDSSH2
+getsysinfo hdtmp ${_i}
+ENDSSH2
+ENDSSH
+)
+
+        fi
+
         _temp=`echo ${_text} | awk '{print $1}'`
         _return=${_return}$( mergetoicingatext "${_output}" "HD ${_i} Temp(C°)" "${_temp}" "" "${WARNING}" "${CRITICAL}" "0" "100" )
         if [ ${_temp} -le ${WARNING} ]
@@ -156,10 +195,21 @@ ENDSSH
 ###############################################################################
 ###############################################################################
 systempcheck(){
-_text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
+    if [ -z ${REMOTE} ]
+    then
+        _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
 getsysinfo systmp
 ENDSSH
 )
+    else
+        _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
+ssh ${USERNAME}@${REMOTE} -T <<ENDSSH2
+getsysinfo systmp
+ENDSSH2
+ENDSSH
+)
+
+    fi
 
     _temp=`echo ${_text} | awk '{print $1}'`
     _output="Sys Temperature "
@@ -191,11 +241,21 @@ hddsmartcheck(){
 
     while [ ${_i} -lt ${_num} ]
     do
-
-    _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
+        if [ -z ${REMOTE} ]
+        then
+        _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
 getsysinfo hdsmart ${_i}
 ENDSSH
 )
+        else
+        _text=$(ssh ${USERNAME}@${HOSTNAME} -T -p ${PORT} <<ENDSSH
+ssh ${USERNAME}@${REMOTE} -T <<ENDSSH2
+getsysinfo hdsmart ${_i}
+ENDSSH2
+ENDSSH
+)
+        fi
+
         _smart=`echo ${_text}`
 
         _return=${_return}$( mergetoicingatext "${_output}" "HD ${_i} Smart" "${_smart}" )
@@ -271,7 +331,7 @@ EOF
 
 
 
-OPTS=`getopt  -o qvh:u:pc:w:m: -l hostname:,username:,critical:,warning:,port,mode:,help,version -- "$@"`
+OPTS=`getopt  -o qvh:u:pc:w:m:r: -l hostname:,username:,critical:,warning:,port,mode:,remote:,help,version -- "$@"`
 eval set -- "$OPTS"
 
 while :
@@ -287,6 +347,8 @@ do
             HOSTNAME="$2"; shift 2; ;;
         -p|--port)
             PORT="$2"; shift 2; ;;
+        -r| --remote)
+            REMOTE="$2"; shift 2; ;;
         -c|--critical)
             CRITICAL="$2"; shift 2; ;;
         -w|--warning)
